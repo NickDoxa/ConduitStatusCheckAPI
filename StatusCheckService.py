@@ -1,0 +1,66 @@
+from fastapi import FastAPI
+from datetime import datetime, timezone
+from typing import List, Optional
+from pydantic import BaseModel
+from mcstatus import JavaServer
+import asyncio
+import logging
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class ServerStatusResponse(BaseModel):
+    isOnline: bool
+    onlinePlayers: Optional[int]
+    maxPlayers: Optional[int]
+    ping: Optional[float]
+    version: Optional[str]
+    description: Optional[str]
+    checkedAt: datetime
+
+app = FastAPI(title="Conduit Minecraft Server Monitor API", version="1.0.0")
+
+async def ping_minecraft_server(host: str, port: Optional[int]) -> dict:
+    try:
+        if port is None:
+            server = JavaServer.lookup(host)
+        else:
+            server = JavaServer.lookup(host, port)
+
+        status = await asyncio.to_thread(server.status)
+
+        return {
+            "is_online": True,
+            "player_count": status.players.online,
+            "max_players": status.players.max,
+            "latency": status.latency,
+            "version": status.version.name,
+            "motd": status.description
+        }
+    except Exception as e:
+        logging.warning(f"Failed to ping {host}:{port} - {str(e)}")
+        return {
+            "is_online": False,
+            "player_count": None,
+            "max_players": None,
+            "latency": None,
+            "version": None,
+            "motd": None
+        }
+
+@app.get("/conduitapi/servers/status", response_model=List[ServerStatusResponse])
+async def get_server_status(host: str, port: Optional[int] = None):
+    status = await ping_minecraft_server(host, port)
+    return [ServerStatusResponse(
+        isOnline=status["is_online"],
+        onlinePlayers=status["player_count"],
+        maxPlayers=status["max_players"],
+        ping=status["latency"],
+        version=status["version"],
+        description=status["motd"],
+        checkedAt=datetime.now(timezone.utc)
+    )]
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=9000)
