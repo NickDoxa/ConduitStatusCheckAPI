@@ -20,7 +20,7 @@ class ServerStatusResponse(BaseModel):
     description: Optional[str]
     checkedAt: datetime
 
-app = FastAPI(title="Conduit Minecraft Server Monitor API", version="1.0.0")
+app = FastAPI(title="Conduit Minecraft Server Status Check API", version="1.0.0")
 
 async def ping_minecraft_server(host: str, port: Optional[int]) -> dict:
     try:
