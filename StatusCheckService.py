@@ -22,12 +22,12 @@ class ServerStatusResponse(BaseModel):
 
 app = FastAPI(title="Conduit Minecraft Server Status Check API", version="1.0.0")
 
-async def ping_minecraft_server(host: str, port: Optional[int]) -> dict:
+async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
     try:
-        if port is None:
+        if server_port is None:
             server = JavaServer.lookup(host)
         else:
-            server = JavaServer.lookup(host, port)
+            server = JavaServer.lookup(host, server_port)
 
         status = await asyncio.to_thread(server.status)
 
@@ -40,7 +40,7 @@ async def ping_minecraft_server(host: str, port: Optional[int]) -> dict:
             "motd": status.description
         }
     except Exception as e:
-        logging.warning(f"Failed to ping {host}:{port} - {str(e)}")
+        logging.warning(f"Failed to ping {host}:{server_port} - {str(e)}")
         return {
             "is_online": False,
             "player_count": None,
@@ -51,8 +51,8 @@ async def ping_minecraft_server(host: str, port: Optional[int]) -> dict:
         }
 
 @app.get("/conduitapi/servers/status", response_model=List[ServerStatusResponse])
-async def get_server_status(host: str, port: Optional[int] = None):
-    status = await ping_minecraft_server(host, port)
+async def get_server_status(host: str, server_port: Optional[int] = None):
+    status = await ping_minecraft_server(host, server_port)
     return [ServerStatusResponse(
         isOnline=status["is_online"],
         onlinePlayers=status["player_count"],
