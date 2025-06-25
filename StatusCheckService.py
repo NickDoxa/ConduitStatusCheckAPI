@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -63,4 +65,10 @@ async def get_server_status(host: str, port: Optional[int] = None):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=9000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(
+        "StatusCheckService:app",
+        host="0.0.0.0",
+        port=port,
+        reload=False
+    )
