@@ -50,10 +50,10 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
             "motd": None
         }
 
-@app.get("/conduitapi/servers/status", response_model=List[ServerStatusResponse])
+@app.get("/conduitapi/servers/status", response_model=ServerStatusResponse)
 async def get_server_status(host: str, server_port: Optional[int] = None):
     status = await ping_minecraft_server(host, server_port)
-    return [ServerStatusResponse(
+    return ServerStatusResponse(
         isOnline=status["is_online"],
         onlinePlayers=status["player_count"],
         maxPlayers=status["max_players"],
@@ -61,11 +61,11 @@ async def get_server_status(host: str, server_port: Optional[int] = None):
         version=status["version"],
         description=status["motd"],
         checkedAt=datetime.now(timezone.utc)
-    )]
+    )
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 9000))
     uvicorn.run(
         "StatusCheckService:app",
         host="0.0.0.0",
