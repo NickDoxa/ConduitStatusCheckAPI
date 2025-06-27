@@ -49,7 +49,8 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
             "max_players": None,
             "latency": None,
             "version": None,
-            "motd": None
+            "motd": None,
+            "icon": None,
         }
 
 @app.get("/conduitapi/servers/status", response_model=ServerStatusResponse)
