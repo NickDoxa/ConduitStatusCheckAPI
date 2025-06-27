@@ -19,6 +19,7 @@ class ServerStatusResponse(BaseModel):
     version: Optional[str]
     description: Optional[str]
     checkedAt: datetime
+    icon: Optional[str]
 
 app = FastAPI(title="Conduit Minecraft Server Status Check API", version="1.0.0")
 
@@ -37,7 +38,8 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
             "max_players": status.players.max,
             "latency": status.latency,
             "version": status.version.name,
-            "motd": status.description
+            "motd": status.description,
+            "icon": status.icon,
         }
     except Exception as e:
         logging.warning(f"Failed to ping {host}:{server_port} - {str(e)}")
@@ -60,12 +62,13 @@ async def get_server_status(host: str, server_port: Optional[int] = None):
         ping=status["latency"],
         version=status["version"],
         description=status["motd"],
-        checkedAt=datetime.now(timezone.utc)
+        checkedAt=datetime.now(timezone.utc),
+        icon=status["icon"],
     )
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 9000))
+    port = int(os.environ.get("PORT", 7000))
     uvicorn.run(
         "StatusCheckService:app",
         host="0.0.0.0",
