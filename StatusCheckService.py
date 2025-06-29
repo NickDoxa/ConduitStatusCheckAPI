@@ -39,10 +39,11 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
             "max_players": status.players.max,
             "latency": status.latency,
             "version": status.version.name,
-            "motd": status.description,
+            "motd": status.motd.to_plain(),
             "icon": status.icon,
         }
     except Exception as e:
+        logging.warning(f"Failed to java ping {host}:{server_port} - {str(e)}")
         try:
             if server_port is None:
                 server = BedrockServer.lookup(host)
@@ -57,7 +58,7 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
                 "max_players": status.players.max,
                 "latency": status.latency,
                 "version": status.version.name,
-                "motd": status.motd,
+                "motd": status.motd.to_plain(),
                 "icon": None,  # Bedrock servers do not have an icon
             }
         except Exception as e:
