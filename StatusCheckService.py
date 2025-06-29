@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel
 from mcstatus import JavaServer
+from mcstatus import BedrockServer
 import asyncio
 import logging
 from dotenv import load_dotenv
@@ -42,16 +43,34 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
             "icon": status.icon,
         }
     except Exception as e:
-        logging.warning(f"Failed to ping {host}:{server_port} - {str(e)}")
-        return {
-            "is_online": False,
-            "player_count": None,
-            "max_players": None,
-            "latency": None,
-            "version": None,
-            "motd": None,
-            "icon": None,
-        }
+        try:
+            if server_port is None:
+                server = BedrockServer.lookup(host)
+            else:
+                server = BedrockServer.lookup(host, server_port)
+
+            status = await asyncio.to_thread(server.status)
+
+            return {
+                "is_online": True,
+                "player_count": status.players.online,
+                "max_players": status.players.max,
+                "latency": status.latency,
+                "version": status.version.name,
+                "motd": status.motd,
+                "icon": None,  # Bedrock servers do not have an icon
+            }
+        except Exception as e:
+            logging.warning(f"Failed to ping {host}:{server_port} - {str(e)}")
+            return {
+                "is_online": False,
+                "player_count": None,
+                "max_players": None,
+                "latency": None,
+                "version": None,
+                "motd": None,
+                "icon": None,
+            }
 
 @app.get("/conduitapi/servers/status", response_model=ServerStatusResponse)
 async def get_server_status(host: str, server_port: Optional[int] = None):
