@@ -29,7 +29,7 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
         if server_port is None:
             server = JavaServer.lookup(host)
         else:
-            server = JavaServer.lookup(host, server_port)
+            server = JavaServer.lookup(str(host + ":" + str(server_port)))
 
         status = await asyncio.to_thread(server.status)
 
@@ -43,12 +43,12 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
             "icon": status.icon,
         }
     except Exception as e:
-        logging.warning(f"Failed to java ping {host}:{server_port} - {str(e)}")
+        logging.warning(f"Failed to ping {host}:{server_port} as Java - {str(e)}")
         try:
             if server_port is None:
                 server = BedrockServer.lookup(host)
             else:
-                server = BedrockServer.lookup(host, server_port)
+                server = BedrockServer.lookup(str(host + ":" + str(server_port)))
 
             status = await asyncio.to_thread(server.status)
 
@@ -62,7 +62,7 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
                 "icon": None,  # Bedrock servers do not have an icon
             }
         except Exception as e:
-            logging.warning(f"Failed to ping {host}:{server_port} - {str(e)}")
+            logging.warning(f"Failed to ping as Bedrock {host}:{server_port} - {str(e)}")
             return {
                 "is_online": False,
                 "player_count": None,
