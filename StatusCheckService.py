@@ -9,6 +9,7 @@ from mcstatus import BedrockServer
 import asyncio
 import logging
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
@@ -23,6 +24,14 @@ class ServerStatusResponse(BaseModel):
     icon: Optional[str]
 
 app = FastAPI(title="Conduit Minecraft Server Status Check API", version="1.0.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # CHANGE TO PROD ENVIRONMENT WHEN DEPLOYED
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
     try:
