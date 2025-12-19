@@ -23,11 +23,11 @@ class ServerStatusResponse(BaseModel):
     checkedAt: datetime
     icon: Optional[str]
 
-app = FastAPI(title="Conduit Minecraft Server Status Check API", version="1.0.0")
+app = FastAPI(title="Conduit Roblox Game / Minecraft Server Status Check API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # CHANGE TO PROD ENVIRONMENT WHEN DEPLOYED
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,7 +68,7 @@ async def ping_minecraft_server(host: str, server_port: Optional[int]) -> dict:
                 "latency": status.latency,
                 "version": status.version.name,
                 "motd": status.motd.to_plain(),
-                "icon": None,  # Bedrock servers do not have an icon
+                "icon": None,
             }
         except Exception as e:
             logging.warning(f"Failed to ping as Bedrock {host}:{server_port} - {str(e)}")
@@ -95,6 +95,40 @@ async def get_server_status(host: str, server_port: Optional[int] = None):
         checkedAt=datetime.now(timezone.utc),
         icon=status["icon"],
     )
+
+async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optional[str] = None) -> dict:
+    try:
+        import aiohttp
+
+        if place_id:
+            first_url = f"https://apis.roblox.com/universes/v1/places/{place_id}/universe"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(first_url) as response:
+                    data = await response.json()
+                    universe_id = data.get("universeId", None)
+            if universe_id is None:
+                return {"is_online": False}
+        else:
+            return {"is_online": False}
+
+        url = f"https://games.roblox.com/v1/games?universeIds={universe_id}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                data = await response.json()
+                if "data" in data and len(data["data"]) > 0:
+                    game_data = data["data"][0]
+                    return {
+                        "is_online": True,
+                        "playing": game_data.get("playing", 0),
+                        "max_players": game_data.get("maxPlayers", None),
+                        "name": game_data.get("name", None),
+                    }
+                else:
+                    return {"is_online": False}
+    except Exception as e:
+        logging.warning(f"Failed to get Roblox status - {str(e)}")
+        return {"is_online": False}
 
 if __name__ == "__main__":
     import uvicorn

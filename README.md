@@ -2,6 +2,10 @@
 ### Created by Nick Doxa
 
 ## Usage
-This API has one `GET` endpoint *@/conduitapi/servers/status*
+`GET` endpoint *@/conduitapi/servers/status*
 
 You can pass in `host` and `port` as request parameters.
+
+`GET` endpoint *@/conduitapi/roblox/status*
+
+You can pass `placeId` and `universeId` as request parameters.
