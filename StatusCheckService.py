@@ -96,6 +96,13 @@ async def get_server_status(host: str, server_port: Optional[int] = None):
         icon=status["icon"],
     )
 
+@app.get("/conduitapi/roblox/status", response_model={
+    "is_online": bool,
+    "playing": Optional[int],
+    "max_players": Optional[int],
+    "name": Optional[str],
+    "description": Optional[str],
+})
 async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optional[str] = None) -> dict:
     try:
         import aiohttp
@@ -123,6 +130,7 @@ async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optiona
                         "playing": game_data.get("playing", 0),
                         "max_players": game_data.get("maxPlayers", None),
                         "name": game_data.get("name", None),
+                        "description": game_data.get("description", None),
                     }
                 else:
                     return {"is_online": False}
