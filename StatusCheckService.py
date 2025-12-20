@@ -138,7 +138,7 @@ async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optiona
         logging.warning(f"Failed to get Roblox status - {str(e)}")
         return {"is_online": False}
 
-@app.get("/conduitapi/roblox/roblox/status", response_model={
+@app.get("/conduitapi/roblox/universe", response_model={
     "universe_id": Optional[str],
 })
 async def get_roblox_universe_id(place_id: str) -> dict:
