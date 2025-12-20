@@ -2,7 +2,7 @@ import os
 
 from fastapi import FastAPI
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Any, Union, Coroutine
 from pydantic import BaseModel
 from mcstatus import JavaServer
 from mcstatus import BedrockServer
@@ -137,6 +137,26 @@ async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optiona
     except Exception as e:
         logging.warning(f"Failed to get Roblox status - {str(e)}")
         return {"is_online": False}
+
+@app.get("/conduitapi/roblox/roblox/status", response_model={
+    "universe_id": Optional[str],
+})
+async def get_roblox_universe_id(place_id: str) -> dict:
+    try:
+        import aiohttp
+
+        url = f"https://apis.roblox.com/universes/v1/places/{place_id}/universe"
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                data = await response.json()
+                return {
+                    "universe_id": data.get("universeId", None)
+                }
+    except Exception as e:
+        logging.warning(f"Failed to get Roblox universe ID - {str(e)}")
+        return {
+            "universe_id": None
+        }
 
 if __name__ == "__main__":
     import uvicorn
