@@ -2,7 +2,7 @@ import os
 
 from fastapi import FastAPI
 from datetime import datetime, timezone
-from typing import Optional, Any, Union, Coroutine
+from typing import Optional
 from pydantic import BaseModel
 from mcstatus import JavaServer
 from mcstatus import BedrockServer
@@ -22,6 +22,16 @@ class ServerStatusResponse(BaseModel):
     description: Optional[str]
     checkedAt: datetime
     icon: Optional[str]
+
+class RobloxStatusResponse(BaseModel):
+    is_online: bool
+    playing: Optional[int] = None
+    max_players: Optional[int] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+class RobloxUniverseResponse(BaseModel):
+    universe_id: Optional[str] = None
 
 app = FastAPI(title="Conduit Roblox Game / Minecraft Server Status Check API", version="1.0.0")
 
@@ -96,13 +106,7 @@ async def get_server_status(host: str, server_port: Optional[int] = None):
         icon=status["icon"],
     )
 
-@app.get("/conduitapi/roblox/status", response_model={
-    "is_online": bool,
-    "playing": Optional[int],
-    "max_players": Optional[int],
-    "name": Optional[str],
-    "description": Optional[str],
-})
+@app.get("/conduitapi/roblox/status", response_model=RobloxStatusResponse)
 async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optional[str] = None) -> dict:
     try:
         import aiohttp
@@ -138,9 +142,7 @@ async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optiona
         logging.warning(f"Failed to get Roblox status - {str(e)}")
         return {"is_online": False}
 
-@app.get("/conduitapi/roblox/universe", response_model={
-    "universe_id": Optional[str],
-})
+@app.get("/conduitapi/roblox/universe", response_model=RobloxUniverseResponse)
 async def get_roblox_universe_id(place_id: str) -> dict:
     try:
         import aiohttp
@@ -149,14 +151,10 @@ async def get_roblox_universe_id(place_id: str) -> dict:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 data = await response.json()
-                return {
-                    "universe_id": data.get("universeId", None)
-                }
+                return { "universe_id": data.get("universeId", None) }
     except Exception as e:
         logging.warning(f"Failed to get Roblox universe ID - {str(e)}")
-        return {
-            "universe_id": None
-        }
+        return {"universe_id": None}
 
 if __name__ == "__main__":
     import uvicorn
