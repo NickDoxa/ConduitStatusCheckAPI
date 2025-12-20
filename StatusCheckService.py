@@ -29,6 +29,7 @@ class RobloxStatusResponse(BaseModel):
     max_players: Optional[int] = None
     name: Optional[str] = None
     description: Optional[str] = None
+    place_id: Optional[str] = None
 
 class RobloxUniverseResponse(BaseModel):
     universe_id: Optional[str] = None
@@ -133,6 +134,7 @@ async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optiona
                         "max_players": game_data.get("maxPlayers", None),
                         "name": game_data.get("name", None),
                         "description": game_data.get("description", None),
+                        "place_id": str(game_data.get("rootPlaceId", None)),
                     }
                 else:
                     return {"is_online": False}
