@@ -119,8 +119,6 @@ async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optiona
                     universe_id = data.get("universeId", None)
             if universe_id is None:
                 return {"is_online": False}
-        else:
-            return {"is_online": False}
 
         url = f"https://games.roblox.com/v1/games?universeIds={universe_id}"
 
@@ -143,7 +141,7 @@ async def get_roblox_status(place_id: Optional[str] = None, universe_id: Optiona
         return {"is_online": False}
 
 @app.get("/conduitapi/roblox/universe", response_model=RobloxUniverseResponse)
-async def get_roblox_universe_id(place_id: str) -> dict:
+async def get_roblox_universe_id(place_id: int) -> dict:
     try:
         import aiohttp
 
@@ -151,7 +149,7 @@ async def get_roblox_universe_id(place_id: str) -> dict:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 data = await response.json()
-                return { "universe_id": data.get("universeId", None) }
+                return { "universe_id": f'{data.get("universeId", None)}' }
     except Exception as e:
         logging.warning(f"Failed to get Roblox universe ID - {str(e)}")
         return {"universe_id": None}
