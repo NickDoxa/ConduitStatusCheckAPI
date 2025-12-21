@@ -11,7 +11,7 @@ import logging
 from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 import time
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 load_dotenv()
 
@@ -22,6 +22,15 @@ _roblox_status_lock = asyncio.Lock()
 _roblox_universe_lock = asyncio.Lock()
 
 CACHE_TTL_SECONDS = int(os.environ.get("ROBLOX_CACHE_TTL", 600))
+
+STEAM_API_KEY = os.environ.get("STEAM_API_KEY")
+STEAM_CACHE_TTL_SECONDS = int(os.environ.get("STEAM_CACHE_TTL", 600))
+
+_steam_player_cache: Dict[str, Tuple[float, dict]] = {}
+_steam_news_cache: Dict[str, Tuple[float, dict]] = {}
+
+_steam_player_lock = asyncio.Lock()
+_steam_news_lock = asyncio.Lock()
 
 class ServerStatusResponse(BaseModel):
     isOnline: bool
@@ -44,7 +53,25 @@ class RobloxStatusResponse(BaseModel):
 class RobloxUniverseResponse(BaseModel):
     universe_id: Optional[str] = None
 
-app = FastAPI(title="Conduit Roblox Game / Minecraft Server Status Check API", version="1.0.0")
+class SteamPlayerCountResponse(BaseModel):
+    appid: int
+    player_count: Optional[int] = None
+    checkedAt: datetime
+
+class NewsItem(BaseModel):
+    gid: str
+    title: str
+    url: str
+    author: Optional[str] = None
+    contents: Optional[str] = None
+    date: Optional[int] = None
+
+class SteamNewsResponse(BaseModel):
+    appid: int
+    news: List[NewsItem] = []
+    checkedAt: datetime
+
+app = FastAPI(title="Conduit Status Check API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -196,6 +223,81 @@ async def get_roblox_universe_id(place_id: int) -> dict:
             result = {"universe_id": None}
 
         _roblox_universe_cache[key] = (time.time() + CACHE_TTL_SECONDS, result)
+        return result
+
+@app.get("/conduitapi/steam/player_count", response_model=SteamPlayerCountResponse)
+async def get_steam_player_count(appid: int) -> dict:
+    key = str(appid)
+    now = time.time()
+    cached = _steam_player_cache.get(key)
+    if cached and cached[0] > now:
+        return cached[1]
+
+    async with _steam_player_lock:
+        cached = _steam_player_cache.get(key)
+        if cached and cached[0] > now:
+            return cached[1]
+
+        try:
+            import aiohttp
+
+            url = f"https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid={appid}"
+            if STEAM_API_KEY:
+                url += f"&key={STEAM_API_KEY}"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as response:
+                    data = await response.json()
+                    player_count = data.get("response", {}).get("player_count", None)
+                    result = {"appid": appid, "player_count": player_count, "checkedAt": datetime.now(timezone.utc)}
+        except Exception as e:
+            logging.warning(f"Failed to get Steam player count - {str(e)}")
+            result = {"appid": appid, "player_count": None, "checkedAt": datetime.now(timezone.utc)}
+
+        _steam_player_cache[key] = (time.time() + STEAM_CACHE_TTL_SECONDS, result)
+        return result
+
+@app.get("/conduitapi/steam/news", response_model=SteamNewsResponse)
+async def get_steam_news(appid: int, count: int = 10, maxlength: int = 300) -> dict:
+    key = f"{appid}|count={count}|maxlength={maxlength}"
+    now = time.time()
+    cached = _steam_news_cache.get(key)
+    if cached and cached[0] > now:
+        return cached[1]
+
+    async with _steam_news_lock:
+        cached = _steam_news_cache.get(key)
+        if cached and cached[0] > now:
+            return cached[1]
+
+        try:
+            import aiohttp
+
+            url = f"https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid={appid}&count={count}&maxlength={maxlength}"
+            if STEAM_API_KEY:
+                url += f"&key={STEAM_API_KEY}"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=10) as response:
+                    data = await response.json()
+                    items = data.get("appnews", {}).get("newsitems", [])
+                    news_list = []
+                    for it in items:
+                        news_item = {
+                            "gid": str(it.get("gid", "")),
+                            "title": it.get("title", None),
+                            "url": it.get("url", None),
+                            "author": it.get("author", None),
+                            "contents": it.get("contents", None),
+                            "date": it.get("date", None),
+                        }
+                        news_list.append(news_item)
+                    result = {"appid": appid, "news": news_list, "checkedAt": datetime.now(timezone.utc)}
+        except Exception as e:
+            logging.warning(f"Failed to get Steam news - {str(e)}")
+            result = {"appid": appid, "news": [], "checkedAt": datetime.now(timezone.utc)}
+
+        _steam_news_cache[key] = (time.time() + STEAM_CACHE_TTL_SECONDS, result)
         return result
 
 if __name__ == "__main__":
