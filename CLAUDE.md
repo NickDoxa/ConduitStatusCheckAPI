@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Conduit Status Check API is a FastAPI-based REST service providing status checks and metadata for gaming platforms (Minecraft, Roblox, Steam). Single-file application deployed on Heroku.
+Conduit Status Check API is a FastAPI-based REST service providing status checks and metadata for gaming platforms (Minecraft, Roblox, Steam, Epic Games). Single-file application deployed on Heroku.
 
 ## Commands
 
@@ -27,6 +27,7 @@ No test suite is configured.
 - `ROBLOX_CACHE_TTL` - Roblox cache TTL in seconds (default: 600)
 - `STEAM_API_KEY` - Steam API key for authenticated requests
 - `STEAM_CACHE_TTL` - Steam cache TTL in seconds (default: 600)
+- `EPIC_CACHE_TTL` - Epic Games cache TTL in seconds (default: 600)
 
 Use `.env` file for local development (python-dotenv enabled).
 
@@ -48,6 +49,7 @@ Use `.env` file for local development (python-dotenv enabled).
 - Minecraft: `mcstatus` library (supports both Java and Bedrock protocols)
 - Roblox: REST API calls for universe lookup and game status
 - Steam: REST API calls for player counts and news
+- Epic Games: `epicstore_api` library (synchronous, wrapped with `asyncio.to_thread()`)
 
 ## API Endpoints
 
@@ -58,6 +60,7 @@ Use `.env` file for local development (python-dotenv enabled).
 | `GET /conduitapi/roblox/universe` | `place_id` (int) | Cached |
 | `GET /conduitapi/steam/player_count` | `appid` | Cached |
 | `GET /conduitapi/steam/news` | `appid`, `count`, `maxlength` | Cached |
+| `GET /conduitapi/epic/games` | `count`, `sort_by`, `sort_dir`, `free_only` | Cached |
 
 ## Code Conventions
 

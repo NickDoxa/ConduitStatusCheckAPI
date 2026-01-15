@@ -32,6 +32,11 @@ _steam_news_cache: Dict[str, Tuple[float, dict]] = {}
 _steam_player_lock = asyncio.Lock()
 _steam_news_lock = asyncio.Lock()
 
+EPIC_CACHE_TTL_SECONDS = int(os.environ.get("EPIC_CACHE_TTL", 600))
+
+_epic_games_cache: Dict[str, Tuple[float, dict]] = {}
+_epic_games_lock = asyncio.Lock()
+
 class ServerStatusResponse(BaseModel):
     isOnline: bool
     onlinePlayers: Optional[int]
@@ -69,6 +74,24 @@ class NewsItem(BaseModel):
 class SteamNewsResponse(BaseModel):
     appid: int
     news: List[NewsItem] = []
+    checkedAt: datetime
+
+class EpicGameImage(BaseModel):
+    type: str
+    url: str
+
+class EpicGameInfo(BaseModel):
+    title: str
+    publisher: Optional[str] = None
+    description: Optional[str] = None
+    store_url: str
+    images: List[EpicGameImage] = []
+    original_price: Optional[str] = None
+    current_price: Optional[str] = None
+    is_free: bool = False
+
+class EpicGamesResponse(BaseModel):
+    games: List[EpicGameInfo] = []
     checkedAt: datetime
 
 app = FastAPI(title="Conduit Status Check API", version="1.0.0")
@@ -298,6 +321,96 @@ async def get_steam_news(appid: int, count: int = 10, maxlength: int = 300) -> d
             result = {"appid": appid, "news": [], "checkedAt": datetime.now(timezone.utc)}
 
         _steam_news_cache[key] = (time.time() + STEAM_CACHE_TTL_SECONDS, result)
+        return result
+
+def _transform_epic_game(game: dict) -> dict:
+    """Transform Epic Games API response to our model format."""
+    title = game.get("title", "Unknown")
+    publisher = game.get("seller", {}).get("name")
+    description = game.get("description")
+
+    # Build store URL
+    offer_type = game.get("offerType", "")
+    url_type = "bundles" if offer_type == "BUNDLE" else "p"
+    mappings = game.get("catalogNs", {}).get("mappings", [])
+    slug = mappings[0].get("pageSlug") if mappings else game.get("urlSlug", "")
+    store_url = f"https://store.epicgames.com/en-US/{url_type}/{slug}" if slug else ""
+
+    # Extract images
+    images = []
+    for img in game.get("keyImages", []):
+        if img.get("type") and img.get("url"):
+            images.append({"type": img["type"], "url": img["url"]})
+
+    # Extract pricing
+    price_info = game.get("price", {}).get("totalPrice", {}).get("fmtPrice", {})
+    original_price = price_info.get("originalPrice")
+    current_price = price_info.get("discountPrice")
+
+    # Check if free
+    discount_price_raw = game.get("price", {}).get("totalPrice", {}).get("discountPrice", -1)
+    is_free = discount_price_raw == 0
+
+    return {
+        "title": title,
+        "publisher": publisher,
+        "description": description,
+        "store_url": store_url,
+        "images": images,
+        "original_price": original_price,
+        "current_price": current_price,
+        "is_free": is_free,
+    }
+
+@app.get("/conduitapi/epic/games", response_model=EpicGamesResponse)
+async def get_epic_games(
+    count: int = 10,
+    sort_by: str = "releaseDate",
+    sort_dir: str = "DESC",
+    free_only: bool = False
+) -> dict:
+    key = f"count={count}|sort_by={sort_by}|sort_dir={sort_dir}|free_only={free_only}"
+    now = time.time()
+    cached = _epic_games_cache.get(key)
+    if cached and cached[0] > now:
+        return cached[1]
+
+    async with _epic_games_lock:
+        cached = _epic_games_cache.get(key)
+        if cached and cached[0] > now:
+            return cached[1]
+
+        try:
+            from epicstore_api import EpicGamesStoreAPI
+
+            api = EpicGamesStoreAPI(locale="en-US", country="US")
+
+            if free_only:
+                raw = await asyncio.to_thread(api.get_free_games)
+                elements = raw.get("data", {}).get("Catalog", {}).get("searchStore", {}).get("elements", [])
+                # Filter to actually free items (discount price = 0)
+                games_raw = [
+                    g for g in elements
+                    if g.get("promotions") and g.get("price", {}).get("totalPrice", {}).get("discountPrice") == 0
+                ]
+            else:
+                raw = await asyncio.to_thread(
+                    api.fetch_store_games,
+                    count=count,
+                    product_type="games/edition/base",
+                    sort_by=sort_by,
+                    sort_dir=sort_dir,
+                    with_price=True,
+                )
+                games_raw = raw.get("data", {}).get("Catalog", {}).get("searchStore", {}).get("elements", [])
+
+            games = [_transform_epic_game(g) for g in games_raw[:count]]
+            result = {"games": games, "checkedAt": datetime.now(timezone.utc)}
+        except Exception as e:
+            logging.warning(f"Failed to get Epic games - {str(e)}")
+            result = {"games": [], "checkedAt": datetime.now(timezone.utc)}
+
+        _epic_games_cache[key] = (time.time() + EPIC_CACHE_TTL_SECONDS, result)
         return result
 
 if __name__ == "__main__":
