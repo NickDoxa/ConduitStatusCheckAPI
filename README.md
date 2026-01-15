@@ -209,6 +209,7 @@ curl "http://localhost:7000/conduitapi/epic/games?collection=most-played&free_on
 {
   "games": [
     {
+      "id": "09176f4ff7564bbbb499bbe20bd6348f",
       "title": "Fortnite",
       "publisher": "Epic Games",
       "description": "Fortnite",
@@ -228,6 +229,7 @@ curl "http://localhost:7000/conduitapi/epic/games?collection=most-played&free_on
       "is_free": true
     },
     {
+      "id": "9773aa1aa54f4f7b80e44bef04986cea",
       "title": "Rocket League",
       "publisher": "Psyonix LLC",
       "description": "Rocket League",

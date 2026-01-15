@@ -81,6 +81,7 @@ class EpicGameImage(BaseModel):
     url: str
 
 class EpicGameInfo(BaseModel):
+    id: str
     title: str
     publisher: Optional[str] = None
     description: Optional[str] = None
@@ -325,6 +326,7 @@ async def get_steam_news(appid: int, count: int = 10, maxlength: int = 300) -> d
 
 def _transform_epic_game(game: dict) -> dict:
     """Transform Epic Games API response to our model format."""
+    game_id = game.get("id", "")
     title = game.get("title", "Unknown")
     publisher = game.get("seller", {}).get("name")
     description = game.get("description")
@@ -352,6 +354,7 @@ def _transform_epic_game(game: dict) -> dict:
     is_free = discount_price_raw == 0
 
     return {
+        "id": game_id,
         "title": title,
         "publisher": publisher,
         "description": description,
