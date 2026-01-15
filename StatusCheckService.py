@@ -365,11 +365,18 @@ def _transform_epic_game(game: dict) -> dict:
 @app.get("/conduitapi/epic/games", response_model=EpicGamesResponse)
 async def get_epic_games(
     count: int = 10,
-    sort_by: str = "releaseDate",
-    sort_dir: str = "DESC",
+    collection: str = "most-played",
     free_only: bool = False
 ) -> dict:
-    key = f"count={count}|sort_by={sort_by}|sort_dir={sort_dir}|free_only={free_only}"
+    """
+    Fetch Epic Games from curated collections.
+
+    Args:
+        count: Number of games to return (max 100)
+        collection: Collection type - "most-played", "top-sellers", "most-popular", "top-player-reviewed"
+        free_only: If true, only return free games from the collection
+    """
+    key = f"collection={collection}|count={count}|free_only={free_only}"
     now = time.time()
     cached = _epic_games_cache.get(key)
     if cached and cached[0] > now:
@@ -382,27 +389,38 @@ async def get_epic_games(
 
         try:
             from epicstore_api import EpicGamesStoreAPI
+            from epicstore_api.models import EGSCollectionType
 
             api = EpicGamesStoreAPI(locale="en-US", country="US")
 
+            # Map string to collection type
+            collection_map = {
+                "most-played": EGSCollectionType.MOST_PLAYED,
+                "top-sellers": EGSCollectionType.TOP_SELLERS,
+                "most-popular": EGSCollectionType.MOST_POPULAR,
+                "top-player-reviewed": EGSCollectionType.TOP_PLAYER_RATED,
+                "top-wishlisted": EGSCollectionType.TOP_UPCOMING_WISHLISTED,
+            }
+
+            collection_type = collection_map.get(collection, EGSCollectionType.MOST_PLAYED)
+            raw = await asyncio.to_thread(api.get_collection, collection_type)
+
+            # Collection responses use Storefront.collectionLayout.collectionOffers
+            elements = (
+                raw.get("data", {})
+                .get("Storefront", {})
+                .get("collectionLayout", {})
+                .get("collectionOffers", [])
+            )
+
             if free_only:
-                raw = await asyncio.to_thread(api.get_free_games)
-                elements = raw.get("data", {}).get("Catalog", {}).get("searchStore", {}).get("elements", [])
-                # Filter to actually free items (discount price = 0)
+                # Filter to only free games (discountPrice == 0)
                 games_raw = [
                     g for g in elements
-                    if g.get("promotions") and g.get("price", {}).get("totalPrice", {}).get("discountPrice") == 0
+                    if g.get("price", {}).get("totalPrice", {}).get("discountPrice") == 0
                 ]
             else:
-                raw = await asyncio.to_thread(
-                    api.fetch_store_games,
-                    count=count,
-                    product_type="games/edition/base",
-                    sort_by=sort_by,
-                    sort_dir=sort_dir,
-                    with_price=True,
-                )
-                games_raw = raw.get("data", {}).get("Catalog", {}).get("searchStore", {}).get("elements", [])
+                games_raw = elements
 
             games = [_transform_epic_game(g) for g in games_raw[:count]]
             result = {"games": games, "checkedAt": datetime.now(timezone.utc)}

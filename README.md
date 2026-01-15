@@ -171,23 +171,37 @@ curl "http://localhost:7000/conduitapi/steam/news?appid=730&count=2"
 
 `GET /conduitapi/epic/games`
 
-Get games from the Epic Games Store with optional filtering.
+Get games from Epic Games Store curated collections. Returns popular titles including free-to-play games like Fortnite and Rocket League.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `count` | int | No | 10 | Number of games to return |
-| `sort_by` | string | No | "releaseDate" | Sort field |
-| `sort_dir` | string | No | "DESC" | Sort direction (ASC/DESC) |
-| `free_only` | bool | No | false | Only return currently free games |
+| `count` | int | No | 10 | Number of games to return (max 100) |
+| `collection` | string | No | "most-played" | Collection type (see below) |
+| `free_only` | bool | No | false | Only return free games from the collection |
 
-**Example Request - Recent Games:**
+**Available Collections:**
+
+| Collection | Description |
+|------------|-------------|
+| `most-played` | Most played games (includes F2P titles like Fortnite, Rocket League) |
+| `top-sellers` | Best selling games |
+| `most-popular` | Most popular games |
+| `top-player-reviewed` | Highest rated by players |
+| `top-wishlisted` | Most wishlisted upcoming games |
+
+**Example Request - Most Played Games:**
 ```bash
-curl "http://localhost:7000/conduitapi/epic/games?count=5"
+curl "http://localhost:7000/conduitapi/epic/games?collection=most-played&count=10"
 ```
 
-**Example Request - Free Games:**
+**Example Request - Top Sellers:**
 ```bash
-curl "http://localhost:7000/conduitapi/epic/games?free_only=true"
+curl "http://localhost:7000/conduitapi/epic/games?collection=top-sellers&count=5"
+```
+
+**Example Request - Free Games Only:**
+```bash
+curl "http://localhost:7000/conduitapi/epic/games?collection=most-played&free_only=true"
 ```
 
 **Example Response:**
@@ -195,21 +209,36 @@ curl "http://localhost:7000/conduitapi/epic/games?free_only=true"
 {
   "games": [
     {
-      "title": "Bloons TD 6",
-      "publisher": "Ninja Kiwi",
-      "description": "The Bloons are back and better than ever!",
-      "store_url": "https://store.epicgames.com/en-US/p/bloons-td-6-bf95a0",
+      "title": "Fortnite",
+      "publisher": "Epic Games",
+      "description": "Fortnite",
+      "store_url": "https://store.epicgames.com/en-US/p/fortnite",
       "images": [
         {
           "type": "Thumbnail",
-          "url": "https://cdn1.epicgames.com/..."
+          "url": "https://cdn1.epicgames.com/offer/fn/..."
         },
         {
           "type": "OfferImageWide",
-          "url": "https://cdn1.epicgames.com/..."
+          "url": "https://cdn1.epicgames.com/offer/fn/..."
         }
       ],
-      "original_price": "$13.99",
+      "original_price": "0",
+      "current_price": "0",
+      "is_free": true
+    },
+    {
+      "title": "Rocket League",
+      "publisher": "Psyonix LLC",
+      "description": "Rocket League",
+      "store_url": "https://store.epicgames.com/en-US/p/rocket-league",
+      "images": [
+        {
+          "type": "OfferImageWide",
+          "url": "https://cdn1.epicgames.com/offer/..."
+        }
+      ],
+      "original_price": "0",
       "current_price": "0",
       "is_free": true
     }
