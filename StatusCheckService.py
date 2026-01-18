@@ -37,6 +37,13 @@ EPIC_CACHE_TTL_SECONDS = int(os.environ.get("EPIC_CACHE_TTL", 600))
 _epic_games_cache: Dict[str, Tuple[float, dict]] = {}
 _epic_games_lock = asyncio.Lock()
 
+HYTALE_CACHE_TTL_SECONDS = int(os.environ.get("HYTALE_CACHE_TTL", 60))
+HYTALE_DEFAULT_QUERY_PORT = 5523
+HYTALE_DEFAULT_GAME_PORT = 5520
+
+_hytale_status_cache: Dict[str, Tuple[float, dict]] = {}
+_hytale_status_lock = asyncio.Lock()
+
 class ServerStatusResponse(BaseModel):
     isOnline: bool
     onlinePlayers: Optional[int]
@@ -93,6 +100,22 @@ class EpicGameInfo(BaseModel):
 
 class EpicGamesResponse(BaseModel):
     games: List[EpicGameInfo] = []
+    checkedAt: datetime
+
+class HytalePlayerInfo(BaseModel):
+    name: str
+    uuid: Optional[str] = None
+    world: Optional[str] = None
+
+class HytaleServerStatusResponse(BaseModel):
+    isOnline: bool
+    serverName: Optional[str] = None
+    version: Optional[str] = None
+    onlinePlayers: Optional[int] = None
+    maxPlayers: Optional[int] = None
+    defaultWorld: Optional[str] = None
+    players: List[HytalePlayerInfo] = []
+    protocolVersion: Optional[int] = None
     checkedAt: datetime
 
 app = FastAPI(title="Conduit Status Check API", version="1.0.0")
@@ -432,6 +455,154 @@ async def get_epic_games(
             result = {"games": [], "checkedAt": datetime.now(timezone.utc)}
 
         _epic_games_cache[key] = (time.time() + EPIC_CACHE_TTL_SECONDS, result)
+        return result
+
+async def ping_hytale_nitrado(host: str, port: int) -> dict:
+    try:
+        import aiohttp
+
+        url = f"http://{host}:{port}/Nitrado/Query"
+        headers = {
+            "Accept": "application/x.hytale.nitrado.query+json;version=1"
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status != 200:
+                    logging.warning(f"Hytale Nitrado query failed with status {response.status}")
+                    return {"is_online": False}
+
+                data = await response.json()
+
+                server_info = data.get("Server", {})
+                universe_info = data.get("Universe", {})
+                players_list = data.get("Players", [])
+
+                players = []
+                for player in players_list:
+                    players.append({
+                        "name": player.get("Name", "Unknown"),
+                        "uuid": player.get("UUID"),
+                        "world": player.get("World"),
+                    })
+
+                return {
+                    "is_online": True,
+                    "server_name": server_info.get("Name"),
+                    "version": server_info.get("Version"),
+                    "online_players": universe_info.get("CurrentPlayers"),
+                    "max_players": server_info.get("MaxPlayers"),
+                    "default_world": universe_info.get("DefaultWorld"),
+                    "players": players,
+                    "protocol_version": server_info.get("ProtocolVersion"),
+                }
+    except asyncio.TimeoutError:
+        logging.warning(f"Hytale Nitrado query timed out for {host}:{port}")
+        return {"is_online": False}
+    except Exception as e:
+        logging.warning(f"Failed to ping Hytale server {host}:{port} via Nitrado - {str(e)}")
+        return {"is_online": False}
+
+async def ping_hytale_hyquery(host: str, port: int) -> dict:
+    try:
+        import socket
+        import struct
+
+        magic_bytes = b"HYQUERY\0"
+
+        def do_udp_query():
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(5)
+            try:
+                sock.sendto(magic_bytes, (host, port))
+                data, _ = sock.recvfrom(4096)
+                return data
+            finally:
+                sock.close()
+
+        response_data = await asyncio.to_thread(do_udp_query)
+
+        if not response_data or len(response_data) < 8:
+            return {"is_online": False}
+
+        if not response_data.startswith(magic_bytes):
+            return {"is_online": False}
+
+        try:
+            import json
+            json_data = response_data[8:].decode('utf-8')
+            data = json.loads(json_data)
+
+            return {
+                "is_online": True,
+                "server_name": data.get("name"),
+                "version": data.get("version"),
+                "online_players": data.get("players", {}).get("online"),
+                "max_players": data.get("players", {}).get("max"),
+                "default_world": data.get("world"),
+                "players": [],
+                "protocol_version": data.get("protocol"),
+            }
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            logging.warning(f"Failed to parse HyQuery response: {e}")
+            return {"is_online": False}
+
+    except socket.timeout:
+        logging.warning(f"HyQuery timed out for {host}:{port}")
+        return {"is_online": False}
+    except Exception as e:
+        logging.warning(f"Failed to ping Hytale server {host}:{port} via HyQuery - {str(e)}")
+        return {"is_online": False}
+
+@app.get("/conduitapi/hytale/status", response_model=HytaleServerStatusResponse)
+async def get_hytale_status(
+    host: str,
+    port: Optional[int] = None,
+    method: str = "nitrado"
+) -> dict:
+    if method == "hyquery":
+        effective_port = port if port is not None else HYTALE_DEFAULT_GAME_PORT
+    else:
+        effective_port = port if port is not None else HYTALE_DEFAULT_QUERY_PORT
+
+    key = f"host={host}|port={effective_port}|method={method}"
+    now = time.time()
+    cached = _hytale_status_cache.get(key)
+    if cached and cached[0] > now:
+        return cached[1]
+
+    async with _hytale_status_lock:
+        cached = _hytale_status_cache.get(key)
+        if cached and cached[0] > now:
+            return cached[1]
+
+        if method == "hyquery":
+            status = await ping_hytale_hyquery(host, effective_port)
+        else:
+            status = await ping_hytale_nitrado(host, effective_port)
+
+        players = [
+            HytalePlayerInfo(
+                name=p.get("name", "Unknown"),
+                uuid=p.get("uuid"),
+                world=p.get("world")
+            )
+            for p in status.get("players", [])
+        ]
+
+        result = {
+            "isOnline": status.get("is_online", False),
+            "serverName": status.get("server_name"),
+            "version": status.get("version"),
+            "onlinePlayers": status.get("online_players"),
+            "maxPlayers": status.get("max_players"),
+            "defaultWorld": status.get("default_world"),
+            "players": players,
+            "protocolVersion": status.get("protocol_version"),
+            "checkedAt": datetime.now(timezone.utc),
+        }
+
+        _hytale_status_cache[key] = (time.time() + HYTALE_CACHE_TTL_SECONDS, result)
         return result
 
 if __name__ == "__main__":

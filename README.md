@@ -251,6 +251,80 @@ curl "http://localhost:7000/conduitapi/epic/games?collection=most-played&free_on
 
 ---
 
+### Hytale Server Status
+
+`GET /conduitapi/hytale/status`
+
+Query a Hytale server's status. Supports two query methods depending on which plugin the server has installed.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `host` | string | Yes | - | Server hostname or IP address |
+| `port` | int | No | 5523 (nitrado) / 5520 (hyquery) | Server query port |
+| `method` | string | No | "nitrado" | Query method (see below) |
+
+**Query Methods:**
+
+| Method | Protocol | Default Port | Required Plugin |
+|--------|----------|--------------|-----------------|
+| `nitrado` | HTTP | 5523 | [Nitrado Query Plugin](https://github.com/nitrado/hytale-plugin-query) |
+| `hyquery` | UDP | 5520 | [HyQuery Plugin](https://www.curseforge.com/hytale/mods/hyquery) |
+
+> **Note:** Servers must have the appropriate query plugin installed to be queryable. Servers without a query plugin will return `isOnline: false`.
+
+**Example Request - Nitrado Query (HTTP):**
+```bash
+curl "http://localhost:7000/conduitapi/hytale/status?host=my-hytale-server.com"
+```
+
+**Example Request - HyQuery (UDP):**
+```bash
+curl "http://localhost:7000/conduitapi/hytale/status?host=my-hytale-server.com&method=hyquery"
+```
+
+**Example Request - Custom Port:**
+```bash
+curl "http://localhost:7000/conduitapi/hytale/status?host=my-hytale-server.com&port=5530"
+```
+
+**Example Response:**
+```json
+{
+  "isOnline": true,
+  "serverName": "My Hytale Server",
+  "version": "1.0.0",
+  "onlinePlayers": 12,
+  "maxPlayers": 50,
+  "defaultWorld": "world",
+  "players": [
+    {
+      "name": "Player1",
+      "uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "world": "world"
+    }
+  ],
+  "protocolVersion": 1,
+  "checkedAt": "2026-01-18T12:00:00Z"
+}
+```
+
+**Response when server is offline or unreachable:**
+```json
+{
+  "isOnline": false,
+  "serverName": null,
+  "version": null,
+  "onlinePlayers": null,
+  "maxPlayers": null,
+  "defaultWorld": null,
+  "players": [],
+  "protocolVersion": null,
+  "checkedAt": "2026-01-18T12:00:00Z"
+}
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -260,9 +334,10 @@ curl "http://localhost:7000/conduitapi/epic/games?collection=most-played&free_on
 | `STEAM_API_KEY` | - | Optional Steam API key |
 | `STEAM_CACHE_TTL` | 600 | Steam endpoint cache TTL (seconds) |
 | `EPIC_CACHE_TTL` | 600 | Epic Games endpoint cache TTL (seconds) |
+| `HYTALE_CACHE_TTL` | 60 | Hytale endpoint cache TTL (seconds) |
 
 ---
 
 ## Caching
 
-All endpoints except Minecraft server status use in-memory TTL caching (default: 10 minutes) to reduce external API calls and improve response times.
+All endpoints except Minecraft server status use in-memory TTL caching to reduce external API calls and improve response times. Default cache TTL is 10 minutes (600 seconds), except for Hytale which uses 1 minute (60 seconds) for more real-time server status.
